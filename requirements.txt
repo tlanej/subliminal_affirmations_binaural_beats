@@ -3,3 +3,4 @@ ibm_watson==8.1.0
 pydub==0.25.1
 pygame==2.6.0
 streamlit==1.38.0
+matplotlib
