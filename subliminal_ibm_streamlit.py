@@ -8,13 +8,25 @@ import tempfile
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-import sys  # Import sys for the Quit button
+import sys
 
 # -----------------------------
 # Initialize Session State
 # -----------------------------
 if 'looped_files' not in st.session_state:
     st.session_state.looped_files = {}
+if 'voices' not in st.session_state:
+    st.session_state.voices = []
+if 'tts_service' not in st.session_state:
+    st.session_state.tts_service = None
+if 'selected_voice_id' not in st.session_state:
+    st.session_state.selected_voice_id = None
+if 'base_freq' not in st.session_state:
+    st.session_state.base_freq = 440  # Default base frequency
+if 'beat_freq' not in st.session_state:
+    st.session_state.beat_freq = 2  # Default beat frequency
+if 'binaural_volume' not in st.session_state:
+    st.session_state.binaural_volume = -15  # Default binaural volume
 
 # -----------------------------
 # Define Helper Functions
@@ -68,7 +80,7 @@ def initialize_tts(ibm_api_key, ibm_url):
         return tts_service
     except Exception as e:
         st.error(f"Failed to initialize IBM Watson TTS service: {e}")
-        st.stop()
+        return None
 
 def get_voices(tts_service):
     """
@@ -141,7 +153,7 @@ def ibm_watson_tts(tts_service, text, voice_name='en-US_AllisonV3Voice', audio_f
         # Save the response content as a WAV file
         with open(audio_file, 'wb') as audio:
             audio.write(response.content)
-        st.write(f"🎤 Audio content written to **{audio_file}**")
+        # st.write(f"🎤 Audio content written to **{audio_file}**")
         return audio_file
     except Exception as e:
         st.error(f"Error during TTS synthesis: {e}")
@@ -229,6 +241,7 @@ def process_audio(input_wav, subliminal_text, base_freq, beat_freq, selected_voi
 
         # Check if a subliminal text file is loaded for TTS
         if subliminal_text:
+            subliminal_text.seek(0)  # Reset file pointer
             affirmations = subliminal_text.read().decode("utf-8")  # Read and decode the file
 
             # Convert affirmations to speech using IBM Watson TTS
@@ -306,7 +319,7 @@ with tab_upload:
 # -----------------------------
 with tab_looper:
     st.header("🌀 2. Loop Your WAV File")
-    uploaded_loop_file = st.file_uploader("Choose a WAV file to loop", type=["wav"], help="Upload a WAV file you wish to loop.")
+    uploaded_loop_file = st.file_uploader("Choose a WAV file to loop", type=["wav"], key="loop_wav", help="Upload a WAV file you wish to loop.")
     
     if uploaded_loop_file:
         # Load audio file
@@ -390,56 +403,34 @@ with tab_settings:
     Adjust the **Base Frequency**, **Beat Frequency**, and **Binaural Beat Volume** to customize your audio experience.
     """)
 
-# -----------------------------
-# Preview Voice Tab
-# -----------------------------
-with tab_preview:
-    st.header("🎙️ 4. Preview Selected Voice")
-    if st.button("🔊 Preview Voice"):
-        try:
-            sample_text = "This is a voice preview."
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_preview_file:
-                tts_wav_file = ibm_watson_tts(tts_service, sample_text, selected_voice_id, temp_preview_file.name)
-                if tts_wav_file:
-                    st.audio(temp_preview_file.name, format="audio/wav")
-                    os.unlink(temp_preview_file.name)  # Clean up temporary file
-        except Exception as e:
-            st.error(f"An error occurred while previewing the voice: {str(e)}")
+    # Input fields for IBM Watson TTS API Key and URL
+    st.subheader("🔑 IBM Watson Text-to-Speech Credentials")
+    ibm_api_key = st.text_input("IBM Watson API Key", type="password", help="Enter your IBM Watson Text-to-Speech API Key.")
+    ibm_url = st.text_input("IBM Watson Service URL", help="Enter your IBM Watson Text-to-Speech service URL.")
 
-# -----------------------------
-# Convert Tab
-# -----------------------------
-with tab_convert:
-    st.header("🔄 5. Convert Audio with Binaural Beats and Subliminal Affirmations")
-    
-    # Option to select between uploaded main WAV or looped files
-    convert_source = st.radio("📁 Select Audio Source:", ("Upload a New WAV File", "Use a Looped WAV File"), help="Choose whether to upload a new WAV file or use an existing looped file.")
-    
-    if convert_source == "Upload a New WAV File":
-        main_wav = st.file_uploader("🎧 Choose a WAV file", type=["wav"], key="main_wav", help="Upload the main audio file you want to enhance.")
-    else:
-        if st.session_state.looped_files:
-            looped_options = list(st.session_state.looped_files.keys())
-            selected_loop = st.selectbox("🗂️ Select a Looped WAV File:", looped_options, help="Choose a previously looped WAV file to process.")
-            main_wav = None  # No new upload
+    # Initialize tts_service when credentials are provided
+    if ibm_api_key and ibm_url:
+        tts_service = initialize_tts(ibm_api_key, ibm_url)
+        if tts_service:
+            st.session_state.tts_service = tts_service  # Store in session state
+            st.success("✅ IBM Watson TTS service initialized successfully!")
+
+            # Retrieve available voices
+            voices = get_voices(tts_service)
+            if voices:
+                st.session_state.voices = voices
+            else:
+                st.error("❌ Could not retrieve voices from IBM Watson TTS service.")
         else:
-            st.info("🌀 No looped files available. Please create a looped WAV file in the **🌀 Looper** tab.")
-            main_wav = None
-    
-    # File upload for subliminal text file
-    st.header("📄 6. Upload Subliminal Affirmations Text File (Optional)")
-    uploaded_text = st.file_uploader("📄 Choose a Text file with subliminal affirmations", type=["txt"], key="subliminal_text", help="Upload a text file containing subliminal messages to embed into your audio.")
-    
-    # Display uploaded text file name
-    if uploaded_text:
-        st.success(f"✅ Loaded: {uploaded_text.name}")
+            st.error("❌ Failed to initialize IBM Watson TTS service.")
     else:
-        st.info("ℹ️ No subliminal text file uploaded.")
-    
-    # Binaural Beat Settings in Sidebar
-    base_freq = st.sidebar.selectbox("🔊 Base Frequency (Hz):", [100, 200, 300, 400, 440, 500, 600], index=4, help="Select the base frequency for binaural beats.")
-    beat_freq = st.sidebar.selectbox("🎶 Beat Frequency (Hz):", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 30, 40], index=1, help="Select the beat frequency for binaural beats.")
-    binaural_volume = st.sidebar.slider(
+        st.info("ℹ️ Please enter your IBM Watson TTS credentials.")
+
+    # Binaural Beat Settings
+    st.subheader("🎛️ Binaural Beat Settings")
+    base_freq = st.selectbox("🔊 Base Frequency (Hz):", [100, 200, 300, 400, 440, 500, 600], index=4, help="Select the base frequency for binaural beats.")
+    beat_freq = st.selectbox("🎶 Beat Frequency (Hz):", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 30, 40], index=1, help="Select the beat frequency for binaural beats.")
+    binaural_volume = st.slider(
         "🔉 Binaural Beat Volume (dB):",
         min_value=-30,
         max_value=0,
@@ -447,87 +438,92 @@ with tab_convert:
         step=1,
         help="Adjust the volume of the binaural beats. Lower values make the beats quieter."
     )
-    
-    if st.button("▶️ Convert Audio"):
-        if convert_source == "Upload a New WAV File" and not main_wav:
-            st.error("⚠️ Please upload a main WAV file to process.")
-        elif convert_source == "Use a Looped WAV File" and not st.session_state.looped_files:
-            st.error("⚠️ No looped files available. Please create a looped WAV file in the **🌀 Looper** tab.")
-        else:
-            with st.spinner("🔄 Processing audio..."):
-                try:
-                    # Determine the source audio
-                    if convert_source == "Upload a New WAV File":
-                        # Save uploaded WAV to a temporary file
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_input_file:
-                            temp_input_file.write(main_wav.read())
-                            temp_input_file_path = temp_input_file.name
+
+    # Store settings in session_state
+    st.session_state.base_freq = base_freq
+    st.session_state.beat_freq = beat_freq
+    st.session_state.binaural_volume = binaural_volume
+
+# -----------------------------
+# Preview Voice Tab
+# -----------------------------
+with tab_preview:
+    st.header("🎙️ 4. Preview Selected Voice")
+
+    if st.session_state.voices:
+        # Let the user select a voice
+        voice_options = [desc for _, desc in st.session_state.voices]
+        selected_voice_desc = st.selectbox("Select a Voice", voice_options)
+        # Get the voice ID corresponding to the selected description
+        selected_voice_id = next(voice_id for voice_id, desc in st.session_state.voices if desc == selected_voice_desc)
+        st.session_state.selected_voice_id = selected_voice_id  # Store in session state
+
+        if st.button("🔊 Preview Voice"):
+            try:
+                sample_text = "This is a voice preview."
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_preview_file:
+                    tts_wav_file = ibm_watson_tts(st.session_state.tts_service, sample_text, selected_voice_id, temp_preview_file.name)
+                    if tts_wav_file:
+                        st.audio(temp_preview_file.name, format="audio/wav")
                     else:
-                        # Use selected looped file
-                        looped_data = st.session_state.looped_files[selected_loop]
-                        temp_input_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
-                        temp_input_file.write(looped_data)
-                        temp_input_file_path = temp_input_file.name
-                        temp_input_file.close()
-                    
-                    # Process audio
-                    output_audio_path = process_audio(
-                        input_wav=temp_input_file_path,
-                        subliminal_text=uploaded_text,  # Pass UploadedFile object or None
-                        base_freq=base_freq,
-                        beat_freq=beat_freq,
-                        selected_voice=selected_voice_id,
-                        tts_service=tts_service,
-                        binaural_volume_db=binaural_volume  # Pass volume adjustment
-                    )
-
-                    # Clean up input file
-                    os.unlink(temp_input_file_path)
-
-                    if output_audio_path:
-                        # Read the output audio for download
-                        with open(output_audio_path, "rb") as out_f:
-                            out_bytes = out_f.read()
-
-                        st.success("✅ Audio processing complete!")
-                        
-                        # Display processed audio waveform
-                        processed_audio = AudioSegment.from_wav(output_audio_path)
-                        st.subheader("🎵 Processed Audio Waveform")
-                        plot_waveform(processed_audio, title="Processed Audio Waveform")
-                        
-                        # Play processed audio
-                        st.audio(output_audio_path, format="audio/wav")
-                        
-                        # Download button
-                        st.download_button(
-                            label="💾 Download Processed Audio",
-                            data=out_bytes,
-                            file_name="processed_audio.wav",
-                            mime="audio/wav"
-                        )
-
-                        # Clean up output file
-                        os.unlink(output_audio_path)
-                except Exception as e:
-                    st.error(f"An error occurred during processing: {str(e)}")
+                        st.error("❌ Failed to generate voice preview.")
+                os.unlink(temp_preview_file.name)  # Clean up temporary file
+            except Exception as e:
+                st.error(f"An error occurred while previewing the voice: {str(e)}")
+    else:
+        st.info("ℹ️ Please initialize the IBM Watson TTS service and select a voice in the **Settings** tab.")
 
 # -----------------------------
-# Footer with Quit Button
+# Convert Tab
 # -----------------------------
-st.markdown("""
----
-<p style='text-align: center; color: grey;'>
-    Developed by Thomas Lane | 
-    https://github.com/tlanej | 
-    © 2024 All Rights Reserved
-</p>
-""", unsafe_allow_html=True)
+with tab_convert:
+    st.header("🔄 5. Convert Audio with Binaural Beats and Subliminal Affirmations")
 
-# -----------------------------
-# Quit Button
-# -----------------------------
-if st.button("❌ Quit"):
-    st.warning("⚠️ Exiting the app...")
-    sys.exit()
+    # Ensure tts_service and selected_voice_id are initialized
+    if 'tts_service' not in st.session_state or st.session_state.tts_service is None:
+        st.error("⚠️ Please initialize the IBM Watson TTS service in the **Settings** tab.")
+    elif 'selected_voice_id' not in st.session_state or st.session_state.selected_voice_id is None:
+        st.error("⚠️ Please select a voice in the **Preview Voice** tab.")
+    else:
+        # Option to select between uploaded main WAV or looped files
+        convert_source = st.radio("📁 Select Audio Source:", ("Upload a New WAV File", "Use a Looped WAV File"), help="Choose whether to upload a new WAV file or use an existing looped file.")
 
+        if convert_source == "Upload a New WAV File":
+            main_wav = st.file_uploader("🎧 Choose a WAV file", type=["wav"], key="main_wav_convert", help="Upload the main audio file you want to enhance.")
+        else:
+            if st.session_state.looped_files:
+                looped_options = list(st.session_state.looped_files.keys())
+                selected_loop = st.selectbox("🗂️ Select a Looped WAV File:", looped_options, help="Choose a previously looped WAV file to process.")
+                main_wav = None  # No new upload
+            else:
+                st.info("🌀 No looped files available. Please create a looped WAV file in the **🌀 Looper** tab.")
+                main_wav = None
+
+        # File upload for subliminal text file
+        st.header("📄 6. Upload Subliminal Affirmations Text File (Optional)")
+        uploaded_text = st.file_uploader("📄 Choose a Text file with subliminal affirmations", type=["txt"], key="subliminal_text_convert", help="Upload a text file containing subliminal messages to embed into your audio.")
+
+        # Display uploaded text file name
+        if uploaded_text:
+            st.success(f"✅ Loaded: {uploaded_text.name}")
+        else:
+            st.info("ℹ️ No subliminal text file uploaded.")
+
+        if st.button("▶️ Convert Audio"):
+            if convert_source == "Upload a New WAV File" and not main_wav:
+                st.error("⚠️ Please upload a main WAV file to process.")
+            elif convert_source == "Use a Looped WAV File" and not st.session_state.looped_files:
+                st.error("⚠️ No looped files available. Please create a looped WAV file in the **🌀 Looper** tab.")
+            else:
+                with st.spinner("🔄 Processing audio..."):
+                    try:
+                        # Determine the source audio
+                        if convert_source == "Upload a New WAV File":
+                            # Save uploaded WAV to a temporary file
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_input_file:
+                                temp_input_file.write(main_wav.read())
+                                temp_input_file_path = temp_input_file.name
+                        else:
+                            # Use selected looped file
+                            looped_data = st.session_state.looped_files[selected_loop]
+                            temp_input_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav"
