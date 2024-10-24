@@ -285,7 +285,43 @@ Enhance your audio experience by overlaying binaural beats and subliminal affirm
 """)
 
 # Define Tabs
-tab_upload, tab_looper, tab_settings, tab_preview, tab_convert = st.tabs(["📤 Upload", "🌀 Looper", "⚙️ Settings", "🎙️ Preview Voice", "🔄 Convert"])
+tab_instructions, tab_upload, tab_looper, tab_settings, tab_preview, tab_convert = st.tabs(
+    ["ℹ️ Instructions", "📤 Upload", "🌀 Looper", "⚙️ Settings", "🎙️ Preview Voice", "🔄 Convert"])
+
+# -----------------------------
+# Instructions Tab
+# -----------------------------
+with tab_instructions:
+    st.header("ℹ️ How to Obtain IBM Watson API Credentials")
+    st.markdown("""
+    To use the Text-to-Speech features of this app, you need IBM Watson API credentials. Follow these steps:
+
+    ### Step 1: Create an IBM Cloud Account
+    - Go to the [IBM Cloud Sign Up Page](https://cloud.ibm.com/registration).
+    - Fill out the registration form to create a free IBM Cloud account.
+
+    ### Step 2: Create a Text-to-Speech Service Instance
+    - After logging in, go to the [IBM Cloud Catalog](https://cloud.ibm.com/catalog).
+    - Search for **"Text to Speech"** and select the service.
+    - Click on **"Create"** to provision a new instance of the Text-to-Speech service.
+
+    ### Step 3: Get Your API Key and Service URL
+    - Navigate to your **Text to Speech** service dashboard.
+    - Click on **"Manage"** in the left sidebar.
+    - You will find your **API Key** and **Service URL** under the **"Credentials"** section.
+    - Click **"Show"** if the API Key is hidden.
+
+    ### Step 4: Enter Credentials in the App
+    - Go to the **Settings** tab in this app.
+    - Enter your **API Key** and **Service URL** in the respective fields.
+
+    ### Important Notes
+    - Keep your API credentials secure and do not share them publicly.
+    - Some services may require you to upgrade your IBM Cloud account for full access.
+
+    If you encounter any issues, refer to the [IBM Watson Text to Speech Documentation](https://cloud.ibm.com/docs/text-to-speech) or contact IBM Cloud support.
+    """)
+    st.info("Once you have your API Key and Service URL, proceed to the **Settings** tab to configure the app.")
 
 # -----------------------------
 # Upload Tab
@@ -307,7 +343,7 @@ with tab_upload:
 
     # Upload Subliminal Text File
     st.header("📄 2. Upload Subliminal Affirmations Text File (Optional)")
-    uploaded_text = st.file_uploader("Choose a Text file with subliminal affirmations", type=["txt"], help="Upload a text file containing subliminal messages to embed into your audio.")
+    uploaded_text = st.file_uploader("Choose a Text file with subliminal affirmations", type=["txt"], key="upload_text", help="Upload a text file containing subliminal messages to embed into your audio.")
     
     if uploaded_text:
         st.success(f"✅ Loaded: {uploaded_text.name}")
