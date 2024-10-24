@@ -526,4 +526,68 @@ with tab_convert:
                         else:
                             # Use selected looped file
                             looped_data = st.session_state.looped_files[selected_loop]
-                            temp_input_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav"
+                            temp_input_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+                            temp_input_file.write(looped_data)
+                            temp_input_file_path = temp_input_file.name
+                            temp_input_file.close()
+
+                        # Process audio
+                        output_audio_path = process_audio(
+                            input_wav=temp_input_file_path,
+                            subliminal_text=uploaded_text,  # Pass UploadedFile object or None
+                            base_freq=st.session_state.base_freq,
+                            beat_freq=st.session_state.beat_freq,
+                            selected_voice=st.session_state.selected_voice_id,
+                            tts_service=st.session_state.tts_service,
+                            binaural_volume_db=st.session_state.binaural_volume  # Pass volume adjustment
+                        )
+
+                        # Clean up input file
+                        os.unlink(temp_input_file_path)
+
+                        if output_audio_path:
+                            # Read the output audio for download
+                            with open(output_audio_path, "rb") as out_f:
+                                out_bytes = out_f.read()
+
+                            st.success("✅ Audio processing complete!")
+
+                            # Display processed audio waveform
+                            processed_audio = AudioSegment.from_wav(output_audio_path)
+                            st.subheader("🎵 Processed Audio Waveform")
+                            plot_waveform(processed_audio, title="Processed Audio Waveform")
+
+                            # Play processed audio
+                            st.audio(output_audio_path, format="audio/wav")
+
+                            # Download button
+                            st.download_button(
+                                label="💾 Download Processed Audio",
+                                data=out_bytes,
+                                file_name="processed_audio.wav",
+                                mime="audio/wav"
+                            )
+
+                            # Clean up output file
+                            os.unlink(output_audio_path)
+                    except Exception as e:
+                        st.error(f"An error occurred during processing: {str(e)}")
+
+# -----------------------------
+# Footer with Quit Button
+# -----------------------------
+st.markdown("""
+---
+<p style='text-align: center; color: grey;'>
+    Developed by Thomas Lane | 
+    https://github.com/tlanej | 
+    © 2024 All Rights Reserved
+</p>
+""", unsafe_allow_html=True)
+
+# -----------------------------
+# Quit Button
+# -----------------------------
+if st.button("❌ Quit"):
+    st.warning("⚠️ Exiting the app...")
+    sys.exit()
